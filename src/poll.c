@@ -88,11 +88,16 @@ int poll_check(int fd, short event)
   return 0;
 }
 
+/*
+ * 将一个文件描述符 fd 添加到 pollfds 数组中，以便使用 poll() 函数监控这个文件描述符上发生的 event 事件。
+ * 如果 fd 已经存在于 pollfds 数组中，那么它将更新这个文件描述符的事件掩码 events
+ * */
 void poll_listen(int fd, short event)
 {
    nfds_t i = fd_search(fd);
-  
-   if (i < nfds && pollfds[i].fd == fd)
+   print_stack_trace();
+
+    if (i < nfds && pollfds[i].fd == fd)
      pollfds[i].events |= event;
    else
      {

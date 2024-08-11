@@ -258,6 +258,9 @@ struct event_desc {
 #define MS_DHCP   LOG_DAEMON
 #define MS_SCRIPT LOG_MAIL
 
+#include <execinfo.h>
+void print_stack_trace();
+
 struct all_addr {
   union {
     struct in_addr addr4;
@@ -975,13 +978,13 @@ extern struct daemon {
   char *lease_change_command;
   struct iname *if_names, *if_addrs, *if_except, *dhcp_except, *auth_peers, *tftp_interfaces;
   struct bogus_addr *bogus_addr, *ignore_addr;
-  struct server *servers;
+  struct server *servers;       // nameserver 链表.  add_update_server()
   struct ipsets *ipsets;
   int log_fac; /* log facility */
   char *log_file; /* optional log file */
   int max_logs;  /* queue limit */
   int cachesize, ftabsize;
-  int port, query_port, min_port, max_port;
+  int port, query_port, min_port, max_port;     // port==53
   unsigned long local_ttl, neg_ttl, max_ttl, min_cache_ttl, max_cache_ttl, auth_ttl, dhcp_ttl, use_dhcp_ttl;
   char *dns_client_id;
   struct hostsfile *addn_hosts;
@@ -1257,8 +1260,8 @@ char *parse_server(char *arg, union mysockaddr *addr,
 int option_read_dynfile(char *file, int flags);
 
 /* forward.c */
-void reply_query(int fd, int family, time_t now);
-void receive_query(struct listener *listen, time_t now);
+void reply_query(int fd, int family, time_t now);           //接收dns服务器响应后的操作
+void receive_query(struct listener *listen, time_t now);    //接收客户端的响应后的操作:  解析数据包看看是否有缓存，有就立即发送. 没有就调用forward_query()将请求转发给dns服务器
 unsigned char *tcp_request(int confd, time_t now,
 			   union mysockaddr *local_addr, struct in_addr netmask, int auth_dns);
 void server_gone(struct server *server);

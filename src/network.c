@@ -700,8 +700,13 @@ static int make_sock(union mysockaddr *addr, int type, int dienow)
 {
   int family = addr->sa.sa_family;
   int fd, rc, opt = 1;
-  
-  if ((fd = socket(family, type, 0)) == -1)
+
+
+    my_syslog(LOG_INFO, _("port=%d family=%d"), addr->in.sin_port, addr->in.sin_family);
+    print_stack_trace();
+
+
+    if ((fd = socket(family, type, 0)) == -1)
     {
       int port, errsave;
       char *s;
@@ -1243,8 +1248,10 @@ static struct serverfd *allocate_sfd(union mysockaddr *addr, char *intname)
       
       if (addr->sa.sa_family == AF_INET &&
 	  addr->in.sin_addr.s_addr == INADDR_ANY &&
-	  addr->in.sin_port == htons(0)) 
-	return NULL;
+	  addr->in.sin_port == htons(0)) {
+          // 默认直接从这里 return 了
+          return NULL;
+      }
 
 #ifdef HAVE_IPV6
       if (addr->sa.sa_family == AF_INET6 &&
@@ -1261,9 +1268,11 @@ static struct serverfd *allocate_sfd(union mysockaddr *addr, char *intname)
   for (sfd = daemon->sfds; sfd; sfd = sfd->next )
     if (sockaddr_isequal(&sfd->source_addr, addr) &&
 	strcmp(intname, sfd->interface) == 0 &&
-	ifindex == sfd->ifindex) 
-      return sfd;
-  
+	ifindex == sfd->ifindex)  {
+        my_syslog(LOG_WARNING, "jeff 1 ");
+        return sfd;
+    }
+
   /* need to make a new one. */
   errno = ENOMEM; /* in case malloc fails. */
   if (!(sfd = whine_malloc(sizeof(struct serverfd))))
@@ -1370,6 +1379,7 @@ void cleanup_servers(void)
          if (serv->domain)
 	   free(serv->domain);
 	 free(serv);
+           my_syslog(LOG_INFO, _("jeff cleanup_servers"));
        }
       else 
        up = &serv->next;
@@ -1520,6 +1530,7 @@ void check_servers(void)
 	      continue;
 	    }
 
+      // nameserver是自己的IP地址, 也忽略
 	  for (iface = daemon->interfaces; iface; iface = iface->next)
 	    if (sockaddr_isequal(&serv->addr, &iface->addr))
 	      break;
@@ -1574,16 +1585,18 @@ void check_servers(void)
 	      else if (serv->flags & SERV_USE_RESOLV)
 		my_syslog(LOG_INFO, _("using standard nameservers for %s %s"), s1, s2);
 	      else 
-		my_syslog(LOG_INFO, _("using nameserver %s#%d for %s %s %s"), daemon->namebuff, port, s1, s2, s3);
+		my_syslog(LOG_INFO, _("jeff using nameserver %s#%d for %s %s %s"), daemon->namebuff, port, s1, s2, s3);
 	    }
 #ifdef HAVE_LOOP
 	  else if (serv->flags & SERV_LOOP)
 	    my_syslog(LOG_INFO, _("NOT using nameserver %s#%d - query loop detected"), daemon->namebuff, port); 
 #endif
 	  else if (serv->interface[0] != 0)
-	    my_syslog(LOG_INFO, _("using nameserver %s#%d(via %s)"), daemon->namebuff, port, serv->interface); 
-	  else
-	    my_syslog(LOG_INFO, _("using nameserver %s#%d"), daemon->namebuff, port); 
+	    my_syslog(LOG_INFO, _("2 using nameserver %s#%d(via %s)"), daemon->namebuff, port, serv->interface);
+	  else{
+            my_syslog(LOG_INFO, _("3 using nameserver %s#%d.  serv-fd: %d."),
+                      daemon->namebuff, port, serv->sfd);
+        }
 	}
     }
   
@@ -1596,7 +1609,9 @@ void check_servers(void)
   for (sfd = daemon->sfds, up = &daemon->sfds; sfd; sfd = tmp)
     {
        tmp = sfd->next;
-       if (!sfd->used) 
+        my_syslog(LOG_INFO, _("jeff sdf->used = %d"), sfd->used);
+
+        if (!sfd->used)
 	{
 	  *up = sfd->next;
 	  close(sfd->fd);
@@ -1605,8 +1620,10 @@ void check_servers(void)
       else
 	up = &sfd->next;
     }
-  
-  cleanup_servers();
+
+    print_stack_trace();
+
+  cleanup_servers();    // 正常不会走进去
 }
 
 /* Return zero if no servers found, in that case we keep polling.

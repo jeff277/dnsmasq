@@ -428,7 +428,30 @@ void setaddr6part(struct in6_addr *addr, u64 host)
 }
 
 #endif
- 
+
+void print_stack_trace() {
+    void *buffer[100];
+    int size;
+
+    // 获取调用栈中的指针
+    size = backtrace(buffer, 100);
+
+    // 将指针转化为可读的字符串
+    char **symbols = backtrace_symbols(buffer, size);
+
+    if (symbols == NULL) {
+        my_syslog(LOG_INFO, _("backtrace_symbols"));
+        exit(EXIT_FAILURE);
+    }
+
+    // 打印调用栈
+    my_syslog(LOG_INFO, _("Stack trace:"));
+    for (int i = 0; i < size; i++) {
+        my_syslog(LOG_INFO, _("%s"), symbols[i]);
+    }
+
+    free(symbols);
+}
 
 /* returns port number from address */
 int prettyprint_addr(union mysockaddr *addr, char *buf)

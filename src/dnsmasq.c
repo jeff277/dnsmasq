@@ -731,7 +731,8 @@ int main (int argc, char **argv)
   else 
     {
       if (daemon->cachesize != 0)
-	my_syslog(LOG_INFO, _("started, version %s cachesize %d"), VERSION, daemon->cachesize);
+	my_syslog(LOG_INFO, _("started, version %s cachesize %d, port=%d compile %s %s"),
+              VERSION, daemon->cachesize, daemon->port, __DATE__, __TIME__);
       else
 	my_syslog(LOG_INFO, _("started, version %s cache disabled"), VERSION);
 
@@ -992,7 +993,8 @@ int main (int argc, char **argv)
       /* must do this just before select(), when we know no
 	 more calls to my_syslog() can occur */
       set_log_writer();
-      
+
+      // 等待fd有可读/可写事件. 类似epoll_wait()
       if (do_poll(timeout) < 0)
 	continue;
       
@@ -1037,7 +1039,9 @@ int main (int argc, char **argv)
 	  /* poll_resolv doesn't need to reload first time through, since 
 	     that's queued anyway. */
 
-	  poll_resolv(0, daemon->last_resolv != 0, now); 	  
+        // 默认从这里进入 读取 /etc/resolv.conf 中的配置
+        my_syslog(LOG_INFO, _("before poll_resolv()"));
+        poll_resolv(0, daemon->last_resolv != 0, now);
 	  daemon->last_resolv = now;
 	}
 #endif
@@ -1546,18 +1550,21 @@ static int set_dns_listeners(time_t now)
     get_new_frec(now, &wait, 0);
   
   for (serverfdp = daemon->sfds; serverfdp; serverfdp = serverfdp->next)
-    poll_listen(serverfdp->fd, POLLIN);
+    poll_listen(serverfdp->fd, POLLIN);     // todo  nameserver ?
     
   if (daemon->port != 0 && !daemon->osport)
     for (i = 0; i < RANDOM_SOCKS; i++)
       if (daemon->randomsocks[i].refcount != 0)
-	poll_listen(daemon->randomsocks[i].fd, POLLIN);
+	poll_listen(daemon->randomsocks[i].fd, POLLIN);     // todo ??
 	  
   for (listener = daemon->listeners; listener; listener = listener->next)
     {
-      /* only listen for queries if we have resources */
+        my_syslog(LOG_INFO, _("poll_listen fd=%d, family=%d port=%d, name=%s"),
+                  listener->fd, listener->family, listener->iface->addr.in.sin_port, listener->iface->name);
+
+        /* only listen for queries if we have resources */
       if (listener->fd != -1 && wait == 0)
-	poll_listen(listener->fd, POLLIN);
+	poll_listen(listener->fd, POLLIN);      // todo ??
 	
       /* death of a child goes through the select loop, so
 	 we don't need to explicitly arrange to wake up here */
@@ -1588,7 +1595,7 @@ static void check_dns_listeners(time_t now)
   for (serverfdp = daemon->sfds; serverfdp; serverfdp = serverfdp->next)
     if (poll_check(serverfdp->fd, POLLIN))
       reply_query(serverfdp->fd, serverfdp->source_addr.sa.sa_family, now);
-  
+
   if (daemon->port != 0 && !daemon->osport)
     for (i = 0; i < RANDOM_SOCKS; i++)
       if (daemon->randomsocks[i].refcount != 0 && 
